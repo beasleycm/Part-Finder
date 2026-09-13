@@ -29,6 +29,27 @@ import urllib.request
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+
+def _load_dotenv():
+    """Load key=value pairs from a .env file in the same directory as this script."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            # Only set if not already in environment (shell env takes priority)
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv()
+
 PY = r"C:\Users\beasl\AppData\Local\Programs\Python\Python311-arm64\python.exe"
 LIB = r"C:\LocalAILauncher\GoogleDrive\library_search.py"
 
