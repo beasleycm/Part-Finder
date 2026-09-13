@@ -34,47 +34,49 @@ LIB = r"C:\LocalAILauncher\GoogleDrive\library_search.py"
 
 LLM_ENDPOINT = os.environ.get(
     "PARTS_LLM_ENDPOINT",
-    "http://127.0.0.1:50676/v1/chat/completions",
+    "https://ai.chatboxai.app/v1/chat/completions",
 )
-LLM_MODEL = os.environ.get("PARTS_LLM_MODEL", "local-model")
+LLM_MODEL = os.environ.get("PARTS_LLM_MODEL", "claude-opus-5")
 LLM_API_KEY = os.environ.get("PARTS_LLM_API_KEY", "").strip()
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 
 #
-# Port 18182 is NOT a model server. It is the launcher's own HTTP.sys
-# facade (owned by PID 4, System), which answers with prewritten
-# launcher strings and reports zero token usage. Point the agent at a
-# real inference server instead:
+# Default endpoint: Chatbox AI (https://ai.chatboxai.app/v1)
+# Requires PARTS_LLM_API_KEY set to your Chatbox license key.
 #
-#   50676  LM Studio (llama-server)   <-- default here
-#   18181  NPU geniex Qwen3-8B        <-- very slow, times out
+# Alternative local endpoints:
+#   50676  LM Studio (llama-server)
+#   18181  NPU geniex Qwen3-8B (very slow, times out)
+#   18182  Launcher HTTP.sys facade (NOT a real model server)
 #
 
 def discover_local_llm_key():
     """
-    Find the API key of a running local llama-server.
+    Return the configured API key.
 
-    Reads the key out of the live llama-server process arguments so the
-    secret is never written into this file or into version control. Set
-    PARTS_LLM_API_KEY to bypass discovery entirely.
+    For Chatbox AI: set PARTS_LLM_API_KEY to your Chatbox license key.
+    For local llama-server: discovery attempts to read the key from the
+    running process so it's never written into this file or version control.
     """
     if LLM_API_KEY:
         return LLM_API_KEY
 
-    try:
-        proc = subprocess.run(
-            ["powershell", "-NoProfile", "-Command",
-             "Get-CimInstance Win32_Process | "
-             "Where-Object {$_.CommandLine -match 'llama-server'} | "
-             "Select-Object -First 1 -ExpandProperty CommandLine"],
-            capture_output=True, text=True, timeout=30,
-            encoding="utf-8", errors="replace",
-        )
-        found = re.search(r"--api-key\s+(\S+)", proc.stdout or "")
-        if found:
-            return found.group(1).strip()
-    except Exception:
-        pass
+    # Only attempt local discovery if endpoint looks local
+    if "127.0.0.1" in LLM_ENDPOINT or "localhost" in LLM_ENDPOINT:
+        try:
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_Process | "
+                 "Where-Object {$_.CommandLine -match 'llama-server'} | "
+                 "Select-Object -First 1 -ExpandProperty CommandLine"],
+                capture_output=True, text=True, timeout=30,
+                encoding="utf-8", errors="replace",
+            )
+            found = re.search(r"--api-key\s+(\S+)", proc.stdout or "")
+            if found:
+                return found.group(1).strip()
+        except Exception:
+            pass
 
     return ""
 
