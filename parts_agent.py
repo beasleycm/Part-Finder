@@ -29,6 +29,27 @@ import urllib.request
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
+
+def _load_dotenv():
+    """Load key=value pairs from a .env file in the same directory as this script."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(env_path):
+        return
+    with open(env_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+# Load .env BEFORE reading any environment variables
+_load_dotenv()
+
 PY = r"C:\Users\beasl\AppData\Local\Programs\Python\Python311-arm64\python.exe"
 LIB = r"C:\LocalAILauncher\GoogleDrive\library_search.py"
 
@@ -58,8 +79,10 @@ def discover_local_llm_key():
     For local llama-server: discovery attempts to read the key from the
     running process so it's never written into this file or version control.
     """
-    if LLM_API_KEY:
-        return LLM_API_KEY
+    # Read at call time so .env loaded values are picked up
+    runtime_key = os.environ.get("PARTS_LLM_API_KEY", "").strip()
+    if runtime_key:
+        return runtime_key
 
     # Only attempt local discovery if endpoint looks local
     if "127.0.0.1" in LLM_ENDPOINT or "localhost" in LLM_ENDPOINT:
@@ -420,7 +443,7 @@ def _call_llm_once(prompt, timeout=120):
         ],
         "temperature": 0.1,
         "max_tokens": 1500,
-        "stream": True,  # Chatbox AI always streams; consume SSE
+        "stream": True,
     }
     headers = {"Content-Type": "application/json"}
     key = discover_local_llm_key()
@@ -439,8 +462,7 @@ def _call_llm_once(prompt, timeout=120):
     except Exception as exc:
         return {"ok": False, "error": type(exc).__name__ + ": " + str(exc)[:200]}
 
-    # Handle Server-Sent Events (SSE) streaming format:
-    # Each line is "data: <json>" or "data: [DONE]"
+    # Handle SSE streaming format
     answer_parts = []
     usage = {}
     for line in raw.splitlines():
@@ -454,12 +476,10 @@ def _call_llm_once(prompt, timeout=120):
             chunk = json.loads(data)
         except Exception:
             continue
-        # Accumulate content delta
         delta = (chunk.get("choices") or [{}])[0].get("delta", {})
         content = delta.get("content")
         if content:
             answer_parts.append(content)
-        # Grab usage from the final chunk
         if chunk.get("usage"):
             usage = chunk["usage"]
 
@@ -472,9 +492,8 @@ def _call_llm_once(prompt, timeout=120):
             "raw": raw[:200],
         }
 
-    # Normalise usage so the rest of the script can read total_tokens
     if not usage:
-        usage = {"total_tokens": len(answer_parts)}  # fallback estimate
+        usage = {"total_tokens": len(answer_parts)}
 
     return {"ok": True, "answer": answer, "usage": usage}
 
