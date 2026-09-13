@@ -29,27 +29,6 @@ import urllib.request
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-
-def _load_dotenv():
-    """Load key=value pairs from a .env file in the same directory as this script."""
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if not os.path.isfile(env_path):
-        return
-    with open(env_path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, value = line.partition("=")
-            key = key.strip()
-            value = value.strip()
-            # Only set if not already in environment (shell env takes priority)
-            if key and key not in os.environ:
-                os.environ[key] = value
-
-
-_load_dotenv()
-
 PY = r"C:\Users\beasl\AppData\Local\Programs\Python\Python311-arm64\python.exe"
 LIB = r"C:\LocalAILauncher\GoogleDrive\library_search.py"
 
@@ -441,6 +420,7 @@ def _call_llm_once(prompt, timeout=120):
         ],
         "temperature": 0.1,
         "max_tokens": 1500,
+        "stream": True,  # Chatbox AI always streams; consume SSE
     }
     headers = {"Content-Type": "application/json"}
     key = discover_local_llm_key()
@@ -455,19 +435,47 @@ def _call_llm_once(prompt, timeout=120):
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8")
     except Exception as exc:
         return {"ok": False, "error": type(exc).__name__ + ": " + str(exc)[:200]}
 
-    usage = body.get("usage", {}) or {}
-    answer = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    # Handle Server-Sent Events (SSE) streaming format:
+    # Each line is "data: <json>" or "data: [DONE]"
+    answer_parts = []
+    usage = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            chunk = json.loads(data)
+        except Exception:
+            continue
+        # Accumulate content delta
+        delta = (chunk.get("choices") or [{}])[0].get("delta", {})
+        content = delta.get("content")
+        if content:
+            answer_parts.append(content)
+        # Grab usage from the final chunk
+        if chunk.get("usage"):
+            usage = chunk["usage"]
 
-    if usage.get("total_tokens", 0) == 0:
+    answer = "".join(answer_parts)
+
+    if not answer:
         return {
             "ok": False,
-            "error": "endpoint returned 0 tokens (stale/proxy response)",
-            "raw": answer[:200],
+            "error": "endpoint returned empty content",
+            "raw": raw[:200],
         }
+
+    # Normalise usage so the rest of the script can read total_tokens
+    if not usage:
+        usage = {"total_tokens": len(answer_parts)}  # fallback estimate
+
     return {"ok": True, "answer": answer, "usage": usage}
 
 
