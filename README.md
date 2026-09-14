@@ -108,3 +108,66 @@ $env:TAVILY_API_KEY = "your-key"
 - Web queries are automatically anchored to manufacturer + machine type to avoid false positives
 - Irrelevant web results (different products sharing a model number) are filtered out
 - All synthesis is done by your local LLM — Tavily provides raw search results only, not AI answers
+
+## Retrieval fixes (September 2026)
+
+Six defects were causing Layer 1 to return manual pages that did not
+contain the answer. The web and synthesis layers were never at fault.
+
+Symptom: every question about a given machine returned an identical
+6,026-character context. Asking for a JLG 600AJ starter part number
+returned electrical-diagram pages, and the agent correctly reported
+that the manuals held no answer -- while the parts book did contain
+`303 7012679 1 Starter`.
+
+### In `parts_agent.py` (this repository)
+
+- `IDENT_PATTERNS` only matched letters-then-digits (`S-40`, `TL150`).
+  Digit-leading models such as `600AJ`, `800AJ`, and `1930ES` never
+  matched, so `extract_identifiers` returned nothing and web queries
+  lost their model anchor. Added `\b\d{3,4}[A-Z]{1,3}\b`.
+- That pattern also matches ratings like `120V` and `300PSI`, so a
+  `UNIT_SUFFIXES` blocklist rejects tokens whose trailing letters are
+  a unit.
+
+### In `library_search.py` (lives at `C:\LocalAILauncher\GoogleDrive`, not in this repo)
+
+- `retrieve_candidates()` short-circuited whenever a model identifier
+  was present, using only the bare identifier query (`"600AJ"`) and
+  discarding every topic word. That query matches 4,063 chunks; after
+  the 500-candidate cap the pages holding the answer were gone before
+  ranking began. Replaced with `build_identifier_scoped_queries()`,
+  which returns precision-first tiers that all still require the
+  identifier but let topic words choose the chunks.
+- Added `calculate_part_number_proximity_bonus()`, which rewards a
+  component name sitting just after a 6-9 digit part number. This is
+  what separates a real parts-table row from a wiring-diagram callout;
+  without it both scored identically and bm25 noise decided the winner.
+- Added `strip_serial_references()` so `S/N 138090` is not mistaken
+  for a part number by the bonus above.
+- `rank_candidates()` now deduplicates identical chunk text. Several
+  manuals are indexed twice (ANSI and CE), and duplicates were
+  consuming half the context budget.
+- `fallback_match_position()` centred excerpts on the first question
+  token, which for a part-number question is `part` -- present in every
+  page header. The excerpt was centred on a header and the trim window
+  cut the actual table row out of the evidence. It now prefers a
+  component name adjacent to a part number.
+- `extract_required_identifiers()` required four characters after
+  canonicalisation, so `S-40` -> `S40` was discarded and the whole
+  Genie S- and Z- range produced no identifier at all. Added
+  `SHORT_MODEL_CODE_PATTERN` for one-to-two letters plus two-to-three
+  digits.
+- `main()` now reconfigures stdout/stderr to UTF-8. Manual text
+  containing the ohm sign or degree marks raised `UnicodeEncodeError`
+  on the Windows ANSI code page, and the CLI returned
+  `{"success": false, "error": "'charmap' codec can't encode ..."}`
+  even though retrieval had succeeded.
+
+### Verification
+
+Nine regression cases pass. The JLG 600AJ starter question now returns
+`7012679`, `7027408`, and `7026833` from the parts books, and the Genie
+S-40 capacity question returns `45 gallons / 170 liters`. A deliberately
+nonexistent model (`999ZZ`) still returns no local evidence, so the
+precision guarantee is intact.

@@ -24,3 +24,6 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local rollback copies made before in-place patching
+*_PRE_*_FIX.py

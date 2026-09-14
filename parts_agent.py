@@ -138,10 +138,24 @@ def extract_json(raw):
 
 
 IDENT_PATTERNS = [
-    r"\b[A-Z]{1,5}-?\d{2,5}[A-Z]{0,2}\b",       # S-40, TL150, 600AJ, GTH-844
+    r"\b[A-Z]{1,5}-?\d{2,5}[A-Z]{0,2}\b",       # S-40, TL150, GTH-844
     r"\b\d{5,8}[A-Z]{1,4}\b",                    # 1303610GT
     r"\b[A-Z]{2,5}\d{4,7}[A-Z0-9]{0,3}\b",       # BT7Z011, E107240
+    r"\b\d{3,4}[A-Z]{1,3}\b",                    # 600AJ, 800AJ, 1930ES
 ]
+
+#
+# Model codes that lead with digits ("600AJ") share their shape with
+# ratings and units ("120V", "300PSI"). The first comment above claimed
+# pattern 1 matched 600AJ, but it requires letters BEFORE the digits, so
+# every digit-leading JLG model silently produced no identifier at all
+# and web queries lost their model anchor.
+#
+UNIT_SUFFIXES = {
+    "V", "VDC", "VAC", "A", "AH", "MA", "W", "KW", "HP",
+    "PSI", "BAR", "GPM", "LPM", "CFM", "RPM", "NM", "HZ",
+    "LB", "LBS", "KG", "MM", "CM", "IN", "FT", "C", "F",
+}
 
 GENERIC = {
     "A", "AN", "THE", "AND", "OR", "FOR", "OF", "TO", "IS", "IT", "IN",
@@ -222,6 +236,12 @@ def extract_identifiers(question, extra_text="", question_only=True):
                 continue
             if m in GENERIC:
                 continue
+
+            # Reject ratings such as "120V" or "300PSI".
+            trailing = re.match(r"^\d+([A-Z]+)$", m)
+            if trailing and trailing.group(1) in UNIT_SUFFIXES:
+                continue
+
             if m not in found:
                 found.append(m)
     return found
