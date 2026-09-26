@@ -109,6 +109,29 @@ $env:TAVILY_API_KEY = "your-key"
 - Irrelevant web results (different products sharing a model number) are filtered out
 - All synthesis is done by your local LLM — Tavily provides raw search results only, not AI answers
 
+## Batch spreadsheet descriptions
+
+`batch_describe.py` processes a user spreadsheet with part number in column A,
+make in B, and a short description to be written in C. It accepts `.xlsx` or
+`.csv`, preserving the other columns. It deduplicates by **(make, part number)**,
+searches the local manual index first, fetches matching web pages via Tavily,
+and writes only grounded product-copy statements. Unverified rows get the exact
+`Review needed: Unable to verify the function of [make] part [part number].`
+placeholder. A resumable `_audit.jsonl` alongside the output records sources,
+status and reasons; the console reports the number of review rows.
+
+```powershell
+& 'C:\Users\beasl\AppData\Local\Programs\Python\Python311-arm64\python.exe' `
+  .\batch_describe.py 'C:\path\input.xlsx' 'C:\path\output.xlsx' --limit 5
+# Re-run the same input and output paths without --limit for the full batch.
+```
+
+Optional: `--sheet Name` for a non-active Excel sheet and `--overwrite` to
+replace existing column C data. Original input is never overwritten. The
+existing `.env` supplies Tavily and model credentials. **Both services may
+incur charges per distinct make/number**; pilot on a few pairs first. Excel
+must retain part numbers as text when leading zeroes are significant.
+
 ## Retrieval fixes (September 2026)
 
 Six defects were causing Layer 1 to return manual pages that did not
