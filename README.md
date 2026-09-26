@@ -115,7 +115,9 @@ $env:TAVILY_API_KEY = "your-key"
 make in B, and a short description to be written in C. It accepts `.xlsx` or
 `.csv`, preserving the other columns. It deduplicates by **(make, part number)**,
 searches the local manual index first, fetches matching web pages via Tavily,
-and writes only grounded product-copy statements. Unverified rows get the exact
+and writes only grounded product-copy statements. Verified descriptions start
+with `The [item description]`, not `A [make]` or `The [make]`.
+Unverified rows get the exact
 `Review needed: Unable to verify the function of [make] part [part number].`
 placeholder. A resumable `_audit.jsonl` alongside the output records sources,
 status and reasons; the console reports the number of review rows.
