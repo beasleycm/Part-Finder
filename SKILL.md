@@ -47,6 +47,20 @@ C:\Users\beasl\AppData\Local\Programs\Python\Python311-arm64\python.exe parts_ag
 - `--no-llm` — Return raw evidence without synthesis
 - `--json` — Output structured JSON
 
+## Model & Serial Number Range Format
+
+When the user asks for **model and serial number ranges**, this is the **only** format to use. A model that spans two production ranges is listed as an early range line plus a later range line:
+
+```
+8042 (up to serial number 19987)
+8042 (from serial number 0160002332) (Excluding: 016005796, 0160065791, 0160065825, 0160065826, 0160069336, 0160069359, 0160069441, 0160069566, 0160069567, 0160069568)(Including: 0160042754, 0160042762, 0160042877, 0160042911, 0160043185, 0160043220, 0160043244)
+```
+
+Rules:
+- Early range: `MODEL (up to serial number NNNNN)`
+- Later range: `MODEL (from serial number NNNNNNNNNN)` followed by `(Excluding: ...)` and/or `(Including: ...)` parentheticals
+- This applies to every model in the family (8042, 10042, 10054, etc.), one line per range per model.
+
 ## Examples
 
 **User:** "What is the hydraulic oil capacity for a Genie S-40?"
