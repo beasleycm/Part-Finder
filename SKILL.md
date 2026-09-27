@@ -57,8 +57,9 @@ When the user asks for **model and serial number ranges**, this is the **only** 
 ```
 
 Rules:
-- Early range: `MODEL (up to serial number NNNNN)`
-- Later range: `MODEL (from serial number NNNNNNNNNN)` followed by `(Excluding: ...)` and/or `(Including: ...)` parentheticals
+- Early range: `MODEL (up to serial number <serial>)`
+- Later range: `MODEL (from serial number <serial>)` followed by `(Excluding: ...)` and/or `(Including: ...)` parentheticals
+- Serial numbers may have any number of digits — do **not** pad, truncate, or constrain them to a fixed length. Reproduce each serial number exactly as it appears in the source, whatever its digit count (e.g. `19987`, `0160002332`, `016005796`).
 - This applies to every model in the family (8042, 10042, 10054, etc.), one line per range per model.
 
 ## Examples
